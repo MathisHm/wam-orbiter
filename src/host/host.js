@@ -59,8 +59,9 @@ const initExtensions = async () => {
 	const synthDomNode = await synthInstance.createGui();
 	const orbiterDomNode = await orbiterInstance.createGui();
 
-	mount.appendChild(synthDomNode);
 	mount.appendChild(orbiterDomNode);
+	mount.appendChild(synthDomNode);
+
 	
 	mount.onclick = () => audioContext.resume();
 })();

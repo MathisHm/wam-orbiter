@@ -8,13 +8,12 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 	/** Configure AudioParams */
 	static get parameterDescriptors() {
 		return [
-			{ name: 'freqX', defaultValue: 1.0, minValue: 0.1, maxValue: 10 },
-			{ name: 'freqY', defaultValue: 1.0, minValue: 0.1, maxValue: 10 },
-			{ name: 'ampX', defaultValue: 0.5, minValue: 0, maxValue: 1 },
-			{ name: 'ampY', defaultValue: 0.5, minValue: 0, maxValue: 1 },
+			{ name: 'freqX', defaultValue: 2.0, minValue: 1, maxValue: 9},
+			{ name: 'freqY', defaultValue: 4.0, minValue: 1, maxValue: 9},
+			{ name: 'ampX', defaultValue: 0.8, minValue: 0, maxValue: 1 },
+			{ name: 'ampY', defaultValue: 0.8, minValue: 0, maxValue: 1 },
+			{ name: 'phase', defaultValue: 0, minValue: 0, maxValue: Math.PI * 2},
 			{ name: 'centerValue', defaultValue: 0.5, minValue: 0, maxValue: 1 },
-			{ name: 'positionX', defaultValue: 0.5, minValue: 0, maxValue: 1 },
-			{ name: 'positionY', defaultValue: 0.5, minValue: 0, maxValue: 1 },
 			{ name: 'destroyed', defaultValue: 0, minValue: 0, maxValue: 1 }
 		];
 	}
@@ -24,13 +23,12 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 		const { moduleId, instanceId } = options.processorOptions;
 		this.moduleId = moduleId;
 		this.instanceId = instanceId;
-
 		this.phase = 0;
 		this.lastTime = audioWorkletGlobalScope.currentTime;
-
 		this.targetParam = null;
+		this.canvasWidth = 400;
+		this.canvasHeight = 400;
 
-		// Setup message handling
 		this.port.onmessage = this.handleMessage.bind(this);
 		this.log('OrbiterWamProcessor initialized');
 	}
@@ -45,10 +43,6 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 		if (data.type === 'setTarget') {
 			this.targetParam = data.paramId;
 			this.log(`Target parameter set to: ${this.targetParam}`);
-		}
-		else if (data.type === 'setAvailableParams') {
-			this.availableParams = data.params;
-			this.log(`Available parameters updated: ${Object.keys(data.params).length} params`);
 		}
 	}
 
@@ -69,53 +63,49 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 		const destroyed = parameters.destroyed[0];
 		if (destroyed) return false;
 
-		// Ensure proxy is set
-		if (!this.proxy) {
-			return true;
-		}
+		const freqX = parameters.freqX?.length > 1 ? parameters.freqX[0] : (parameters.freqX?.[0] ?? 2.0);
+		const freqY = parameters.freqY?.length > 1 ? parameters.freqY[0] : (parameters.freqY?.[0] ?? 4.0);
+		const ampX = parameters.ampX?.length > 1 ? parameters.ampX[0] : (parameters.ampX?.[0] ?? 0.8);
+		const ampY = parameters.ampY?.length > 1 ? parameters.ampY[0] : (parameters.ampY?.[0] ?? 0.8);
+		const phase = parameters.phase?.length > 1 ? parameters.phase[0] : (parameters.phase?.[0] ?? 0);
+		const centerValue = parameters.centerValue?.length > 1 ? parameters.centerValue[0] : (parameters.centerValue?.[0] ?? 0.5);
 
-		// Get parameters
-		const freqX = parameters.freqX[0];
-		const freqY = parameters.freqY[0];
-		const ampX = parameters.ampX[0];
-		const ampY = parameters.ampY[0];
-		const centerValue = parameters.centerValue[0];
-		const positionX = parameters.positionX[0];
-		const positionY = parameters.positionY[0];
-
-		// Update time and phase
 		const currentTime = audioWorkletGlobalScope.currentTime;
 		const deltaTime = currentTime - this.lastTime;
 		this.lastTime = currentTime;
 
-		// Update phase based on time
 		this.phase += deltaTime;
-		if (this.phase >= 1000) this.phase = 0; // Prevent floating point issues over time
 
-		// Skip processing if no target parameter is set
-		if (!this.targetParam) return true;
+		const t = this.phase;
 
+		const centerX = this.canvasWidth / 2;
+		const centerY = this.canvasHeight / 2;
 
-		const sineX = Math.sin(2 * Math.PI * (this.phase * freqX + positionX)) * ampX;
-		const sineY = Math.sin(2 * Math.PI * (this.phase * freqY + positionY)) * ampY;
+		const x = Math.sin(freqX * t + phase);
+		const y = Math.sin(freqY * t);
 
-		const modulationValue = sineX + sineY;
+		const dotX = centerX + ampX * centerX * x;
+		const dotY = centerY + ampY * centerY * y;
 
 		this.port.postMessage({
-			type: 'modulationValue',
-			value: modulationValue
+			type: 'dotPosition',
+			x: dotX,
+			y: dotY
 		});
 
-		// Send automation event for the target parameter
-		this.proxy.emitEvents({
-			type: 'wam-automation',
-			data: {
-				id: this.targetParam,
-				value: centerValue + modulationValue,
-				normalized: true
-			},
-			time: currentTime
-		});
+		const modulationValue = ampX * Math.sin(freqX * t + phase);
+
+		if (this.targetParam) {
+			this.proxy.emitEvents({
+				type: 'wam-automation',
+				data: {
+					id: this.targetParam,
+					value: centerValue + modulationValue * 0.5,
+					normalized: true
+				},
+				time: currentTime
+			});
+		}
 
 		return true;
 	}
