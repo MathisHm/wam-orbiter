@@ -39,7 +39,6 @@ const initExtensions = async () => {
 	synthInstance.audioNode.connect(audioContext.destination);
 	orbiterInstance.audioNode.connect(audioContext.destination);
 
-	// Register synth as modulation target
 	const synthParams = await synthInstance.audioNode.getParameterInfo();
 	window.WAMExtensions.modulation.setModulationTargetDelegate(
 		synthInstance.instanceId,
@@ -51,7 +50,6 @@ const initExtensions = async () => {
 		}
 	);
 
-	// Connect modulator to synth as target
 	await orbiterInstance.audioNode.connectEvents(synthInstance.instanceId);
 
 

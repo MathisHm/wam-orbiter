@@ -2,25 +2,29 @@ const template = `
 <div class="container">
   <div class="controls">
     <div class="param-selector">
+      <label for="targetDropdown">Target Module:</label>
+      <select id="targetDropdown"></select>
+    </div>
+    <div class="param-selector">
       <label for="paramDropdown">Target Parameter:</label>
       <select id="paramDropdown"></select>
     </div>
     <div class="sliders">
       <div class="slider-group">
-        <label for="freqX">Freq X: <span id="freqXValue">1</span></label>
-        <input type="range" id="freqX" min="1" max="9" step="1" value="1">
+        <label for="freqX">Freq X: <span id="freqXValue">2.0</span></label>
+        <input type="range" id="freqX" min="1" max="9" step="1" value="2">
       </div>
       <div class="slider-group">
-        <label for="freqY">Freq Y: <span id="freqYValue">1</span></label>
-        <input type="range" id="freqY" min="1" max="9" step="1" value="1">
+        <label for="freqY">Freq Y: <span id="freqYValue">4.0</span></label>
+        <input type="range" id="freqY" min="1" max="9" step="1" value="4">
       </div>
       <div class="slider-group">
-        <label for="ampX">Amp X: <span id="ampXValue">1.0</span></label>
-        <input type="range" id="ampX" min="0" max="1" step="0.01" value="1.0">
+        <label for="ampX">Amp X: <span id="ampXValue">0.8</span></label>
+        <input type="range" id="ampX" min="0" max="1.0" step="0.01" value="0.8">
       </div>
       <div class="slider-group">
-        <label for="ampY">Amp Y: <span id="ampYValue">1.0</span></label>
-        <input type="range" id="ampY" min="0" max="1" step="0.01" value="1.0">
+        <label for="ampY">Amp Y: <span id="ampYValue">0.8</span></label>
+        <input type="range" id="ampY" min="0" max="1.0" step="0.01" value="0.8">
       </div>
       <div class="slider-group">
         <label for="phase">Phase: <span id="phaseValue">0</span></label>
@@ -128,18 +132,21 @@ export class OrbiterWamElement extends HTMLElement {
 
     this.sliderIds = ["freqX", "freqY", "ampX", "ampY", "phase"];
     this.sliders = {};
+    
     this.params = {
-      freqX: 1,
-      freqY: 1,
-      ampX: 1.0,
-      ampY: 1.0,
+      freqX: 2.0,
+      freqY: 4.0,
+      ampX: 0.8,
+      ampY: 0.8,
       phase: 0,
     };
 
     this.sliderIds.forEach(id => {
       const el = this.root.getElementById(id);
       const valueDisplay = this.root.getElementById(`${id}Value`);
-
+      
+      valueDisplay.textContent = this.params[id].toFixed(el.step < 1 ? 2 : 1);
+      
       this.sliders[id] = el;
 
       el.addEventListener('input', () => {
@@ -157,13 +164,20 @@ export class OrbiterWamElement extends HTMLElement {
         }
       });
     });
-
+    this.targetDropdown = this.root.getElementById("targetDropdown");
+    this.targetDropdown.addEventListener('change', (e) => {
+      const targetInstanceId = e.target.value;
+      if (targetInstanceId) {
+        this.setTargetInstance(targetInstanceId);
+      }
+    });
     this.paramDropdown = this.root.getElementById("paramDropdown");
     this.paramDropdown.addEventListener('change', (e) => {
       const targetParam = e.target.value;
       if (this.audioNode?.setTargetParameter) {
         this.audioNode.setTargetParameter(targetParam);
       }
+      this.updateTargetParameter(targetParam);
     });
   }
 
@@ -173,6 +187,13 @@ export class OrbiterWamElement extends HTMLElement {
         type: 'setTarget',
         paramId
       });
+    }
+  }
+
+  setTargetInstance(instanceId) {
+    if (this.audioNode) {
+      this.audioNode.setTargetInstance(instanceId);
+      this.populateParameterList(instanceId);
     }
   }
 
@@ -207,6 +228,8 @@ export class OrbiterWamElement extends HTMLElement {
     const { data } = event;
     if (data.type === 'dotPosition') {
       this.drawDotOnCurve(data.x, data.y);
+    } else if (data.type === 'log') {
+      console.log('Processor:', data.message);
     }
   };
 
@@ -220,15 +243,21 @@ export class OrbiterWamElement extends HTMLElement {
   }
 
   connectedCallback() {
+    if (this.audioNode?.setParameterValues) {
+      this.sliderIds.forEach(id => {
+        this.audioNode.setParameterValues({
+          [id]: { id, value: this.params[id], normalized: false }
+        });
+      });
+    }
+    
     this.drawLissajousCurve();
-
 
     if (typeof this.audioNode.addMessageListener === 'function') {
       this.audioNode.addMessageListener(this.handleProcessorMessage);
     }
 
-    this.initializeParameterList();
-
+    this.initializeTargetList();
   }
 
   disconnectedCallback() {
@@ -237,22 +266,46 @@ export class OrbiterWamElement extends HTMLElement {
     }
   }
 
-  async initializeParameterList() {
-    this.paramDropdown.innerHTML = "";
+  async initializeTargetList() {
+    this.targetDropdown.innerHTML = "";
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "-- Select Module --";
+    this.targetDropdown.appendChild(emptyOption);
 
+    if (window.WAMExtensions?.modulation) {
+      const extension = window.WAMExtensions.modulation;
+      if (extension.delegates && extension.delegates.size > 0) {
+        for (const [instanceId, delegate] of extension.delegates) {
+          const option = document.createElement("option");
+          option.value = instanceId;
+          option.textContent = `Module ${instanceId}`;
+          this.targetDropdown.appendChild(option);
+        }
+      }
+    }
+  }
+
+  async populateParameterList(instanceId) {
+    this.paramDropdown.innerHTML = "";
     const emptyOption = document.createElement("option");
     emptyOption.value = "";
     emptyOption.textContent = "-- Select Parameter --";
     this.paramDropdown.appendChild(emptyOption);
 
-    if (window.synth?.audioNode) {
-      const paramInfo = await window.synth.audioNode.getParameterInfo();
-      if (paramInfo) {
-        for (const id of Object.keys(paramInfo)) {
-          const option = document.createElement("option");
-          option.value = id;
-          option.textContent = id;
-          this.paramDropdown.appendChild(option);
+    if (window.WAMExtensions?.modulation) {
+      const extension = window.WAMExtensions.modulation;
+      const delegate = extension.getModulationTargetDelegate(instanceId);
+      
+      if (delegate) {
+        const paramInfo = await delegate.connectModulation();
+        if (paramInfo) {
+          for (const id of Object.keys(paramInfo)) {
+            const option = document.createElement("option");
+            option.value = id;
+            option.textContent = id;
+            this.paramDropdown.appendChild(option);
+          }
         }
       }
     }

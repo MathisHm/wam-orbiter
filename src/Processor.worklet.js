@@ -14,7 +14,6 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 			{ name: 'ampY', defaultValue: 0.8, minValue: 0, maxValue: 1 },
 			{ name: 'phase', defaultValue: 0, minValue: 0, maxValue: Math.PI * 2},
 			{ name: 'centerValue', defaultValue: 0.5, minValue: 0, maxValue: 1 },
-			{ name: 'destroyed', defaultValue: 0, minValue: 0, maxValue: 1 }
 		];
 	}
 
@@ -60,15 +59,12 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 	 * @param {Record<string, Float32Array>} parameters
 	 */
 	process(inputs, outputs, parameters) {
-		const destroyed = parameters.destroyed[0];
-		if (destroyed) return false;
-
-		const freqX = parameters.freqX?.length > 1 ? parameters.freqX[0] : (parameters.freqX?.[0] ?? 2.0);
-		const freqY = parameters.freqY?.length > 1 ? parameters.freqY[0] : (parameters.freqY?.[0] ?? 4.0);
-		const ampX = parameters.ampX?.length > 1 ? parameters.ampX[0] : (parameters.ampX?.[0] ?? 0.8);
-		const ampY = parameters.ampY?.length > 1 ? parameters.ampY[0] : (parameters.ampY?.[0] ?? 0.8);
-		const phase = parameters.phase?.length > 1 ? parameters.phase[0] : (parameters.phase?.[0] ?? 0);
-		const centerValue = parameters.centerValue?.length > 1 ? parameters.centerValue[0] : (parameters.centerValue?.[0] ?? 0.5);
+		const freqX = parameters.freqX[0];
+		const freqY = parameters.freqY[0];
+		const ampX = parameters.ampX[0];
+		const ampY = parameters.ampY[0];
+		const phase = parameters.phase[0];
+		const centerValue = parameters.centerValue[0];
 
 		const currentTime = audioWorkletGlobalScope.currentTime;
 		const deltaTime = currentTime - this.lastTime;
@@ -86,7 +82,7 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 
 		const dotX = centerX + ampX * centerX * x;
 		const dotY = centerY + ampY * centerY * y;
-
+		
 		this.port.postMessage({
 			type: 'dotPosition',
 			x: dotX,
