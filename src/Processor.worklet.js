@@ -4,16 +4,19 @@
 const audioWorkletGlobalScope = globalThis;
 const { AudioWorkletProcessor, registerProcessor } = audioWorkletGlobalScope;
 
+// maps a value from [istart, istop] into [ostart, ostop]
+function map(value, istart, istop, ostart, ostop) {
+	return ostart + (ostop - ostart) * ((value - istart) / (istop - istart));
+}
 class OrbiterWamProcessor extends AudioWorkletProcessor {
 	/** Configure AudioParams */
 	static get parameterDescriptors() {
 		return [
-			{ name: 'freqX', defaultValue: 2.0, minValue: 1, maxValue: 9},
-			{ name: 'freqY', defaultValue: 4.0, minValue: 1, maxValue: 9},
+			{ name: 'freqX', defaultValue: 2.0, minValue: 1, maxValue: 9 },
+			{ name: 'freqY', defaultValue: 4.0, minValue: 1, maxValue: 9 },
 			{ name: 'ampX', defaultValue: 0.8, minValue: 0, maxValue: 1 },
 			{ name: 'ampY', defaultValue: 0.8, minValue: 0, maxValue: 1 },
-			{ name: 'phase', defaultValue: 0, minValue: 0, maxValue: Math.PI * 2},
-			{ name: 'centerValue', defaultValue: 0.5, minValue: 0, maxValue: 1 },
+			{ name: 'phase', defaultValue: 0, minValue: 0, maxValue: Math.PI * 2 },
 		];
 	}
 
@@ -22,7 +25,7 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 		const { moduleId, instanceId } = options.processorOptions;
 		this.moduleId = moduleId;
 		this.instanceId = instanceId;
-		this.phase = 0;
+		this.t = 0;
 		this.lastTime = audioWorkletGlobalScope.currentTime;
 		this.targetParam = null;
 		this.canvasWidth = 400;
@@ -64,39 +67,41 @@ class OrbiterWamProcessor extends AudioWorkletProcessor {
 		const ampX = parameters.ampX[0];
 		const ampY = parameters.ampY[0];
 		const phase = parameters.phase[0];
-		const centerValue = parameters.centerValue[0];
+		//console.log(`freqX: ${freqX}, freqY: ${freqY}, ampX: ${ampX}, ampY: ${ampY}, phase: ${phase}`);
 
 		const currentTime = audioWorkletGlobalScope.currentTime;
 		const deltaTime = currentTime - this.lastTime;
 		this.lastTime = currentTime;
 
-		this.phase += deltaTime;
-
-		const t = this.phase;
+		this.t += deltaTime;
 
 		const centerX = this.canvasWidth / 2;
 		const centerY = this.canvasHeight / 2;
 
-		const x = Math.sin(freqX * t + phase);
-		const y = Math.sin(freqY * t);
+		const x = Math.sin(freqX * this.t + phase);
+		const y = Math.sin(freqY * this.t);
 
 		const dotX = centerX + ampX * centerX * x;
 		const dotY = centerY + ampY * centerY * y;
-		
+
 		this.port.postMessage({
 			type: 'dotPosition',
 			x: dotX,
 			y: dotY
 		});
+		//console.log(`Dot position: (${dotX}, ${dotY})`);
+		const normX = dotX / this.canvasWidth;
+		const normY = dotY / this.canvasHeight;
 
-		const modulationValue = ampX * Math.sin(freqX * t + phase);
+		const modulationValue = 1 - (normX + normY) / 2;
+
 
 		if (this.targetParam) {
 			this.proxy.emitEvents({
 				type: 'wam-automation',
 				data: {
 					id: this.targetParam,
-					value: centerValue + modulationValue * 0.5,
+					value: modulationValue,
 					normalized: true
 				},
 				time: currentTime

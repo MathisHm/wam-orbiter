@@ -31,7 +31,7 @@ export default class OrbiterWamNode extends CompositeAudioNode {
     const freqY = this.orbiterProcessorNode.parameters.get('freqY');
     const ampX = this.orbiterProcessorNode.parameters.get('ampX');
     const ampY = this.orbiterProcessorNode.parameters.get('ampY');
-    const centerValue = this.orbiterProcessorNode.parameters.get('centerValue');
+    const phase = this.orbiterProcessorNode.parameters.get('phase');
 
     const optionsIn = {
       internalParamsConfig: {
@@ -39,7 +39,7 @@ export default class OrbiterWamNode extends CompositeAudioNode {
         freqY,
         ampX,
         ampY,
-        centerValue,
+        phase,
       }
     };
 
