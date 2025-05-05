@@ -53,7 +53,6 @@ export default class OrbiterWamNode extends CompositeAudioNode {
       }
       this.messageListeners.forEach(listener => listener(e));
     };
-
   }
 
   /**
@@ -75,34 +74,40 @@ export default class OrbiterWamNode extends CompositeAudioNode {
     }
   }
 
-
-  async setTargetParameter(paramId) {
+  /**
+   * Set target parameter for a specific corner
+   * @param {string} corner
+   * @param {string} paramId
+   */
+  async setTargetParameter(corner, paramId) {
     if (this.orbiterProcessorNode) {
       this.orbiterProcessorNode.port.postMessage({
         type: 'setTarget',
+        corner,
         paramId
       });
     }
   }
 
-
   async getAvailableParams() {
-      if (window.WAMExtensions && window.WAMExtensions.modulation) {
-        const delegate = window.WAMExtensions.modulation.getModulationTargetDelegate(this.targetInstanceId);
-        if (delegate) {
-          return await delegate.connectModulation();
-        }
+    if (window.WAMExtensions && window.WAMExtensions.modulation) {
+      const delegate = window.WAMExtensions.modulation.getModulationTargetDelegate(this.targetInstanceId);
+      if (delegate) {
+        return await delegate.connectModulation();
       }
-      
+    }
+    return null;
   }
 
   setTargetInstance(instanceId) {
     this.targetInstanceId = instanceId;
     this.getAvailableParams().then(params => {
-      this.orbiterProcessorNode.port.postMessage({
-        type: 'setAvailableParams',
-        params
-      });
+      if (params) {
+        this.orbiterProcessorNode.port.postMessage({
+          type: 'setAvailableParams',
+          params
+        });
+      }
     });
   }
 
@@ -118,7 +123,11 @@ export default class OrbiterWamNode extends CompositeAudioNode {
 
   destroy() {
     if (this.orbiterProcessorNode) {
-      this.orbiterProcessorNode.parameters.get('destroyed').value = 1;
+      // Check if 'destroyed' parameter exists before setting it
+      const destroyedParam = this.orbiterProcessorNode.parameters.get('destroyed');
+      if (destroyedParam) {
+        destroyedParam.value = 1;
+      }
     }
     // Clear message listeners
     this.messageListeners = [];
